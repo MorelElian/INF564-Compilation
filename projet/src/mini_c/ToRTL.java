@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+// Notes perso : 
+// On a choisi la convention le callee change le next label ce qui n'est peut être pas le mieux ...
 
 public class ToRTL extends EmptyVisitor
 {
@@ -75,6 +77,7 @@ public class ToRTL extends EmptyVisitor
 		//System.out.println("return");
 		next_label = exit_label;
 		current_register = fun_result;
+		current_label = exit_label;
 		n.e.accept(this);				
 	}
 	
@@ -97,25 +100,28 @@ public class ToRTL extends EmptyVisitor
 		switch(expr.u) {
 			case Uneg :
 			Register r2 = new Register();
-			current_instr = new Rmbinop(Mbinop.Msub, current_register,r2, next_label);
+			current_instr = new Rmbinop(Mbinop.Msub, r2, current_register, next_label);
 			current_label = graph.add(current_instr);
 			next_label = current_label;
-			current_instr = new Rmbinop(Mbinop.Msub, current_register,r2, next_label);
+			current_instr = new Rmbinop(Mbinop.Msub, r2, current_register, next_label);
 			current_label = graph.add(current_instr);
+			next_label = current_label;
+			current_instr = new Rmbinop(Mbinop.Mmov, current_register,r2,next_label);
+			current_label = graph.add(current_instr);
+			next_label = current_label;
 			expr.e.accept(this);
-			current_register = r2; 	
-			expr.e.accept(this);
+			
 			break;
 			
 			case Unot :	
-			Munop m = new Msetnei(0) ;
+			Munop m = new Msetei(0) ;
 			current_instr = new Rmunop(m,current_register,next_label);
 			current_label = graph.add(current_instr);
 			expr.e.accept(this);
 			break;
 		}
 
-		// System.out.println("label_memo=" + label_memo);
+		// System.out.println("label_memo=" + label_memo);x
 	}
 	
 	
@@ -123,8 +129,8 @@ public class ToRTL extends EmptyVisitor
 		// Label label_memo = next_label ;
 		Register r2 = current_register ;
 		Register r1 = new Register() ;
-
-		Mbinop m ;
+		boolean flag = false;
+		Mbinop m  = Mbinop.Madd;
 		switch(expr.b) {
 		case Badd : //done
 			m = Mbinop.Madd ;
@@ -138,11 +144,17 @@ public class ToRTL extends EmptyVisitor
 		case Bdiv : //done
 			m = Mbinop.Mdiv ;
 			break ;
-		case Band : //Pas fait, est-ce qu'ils sont vraiment importants ?
-			m = Mbinop.Madd ;
+		case Band : 
+			current_instr = new Rmunop(new Msetnei(0),current_register,current_label);
+			current_label = graph.add(current_instr);
+			this.RTLc(expr, current_label, current_label);
+			flag = true;
 			break ;
-		case Bor : //Pas fait, est-ce qu'ils sont vraiment importants ?
-			m = Mbinop.Madd ;
+		case Bor : 
+			current_instr = new Rmunop(new Msetnei(0),current_register,current_label);
+			current_label = graph.add(current_instr);
+			this.RTLc(expr, current_label, current_label);
+			flag = true;
 			break ;
 		case Beq : //done
 			m = Mbinop.Msete ;
@@ -167,6 +179,8 @@ public class ToRTL extends EmptyVisitor
 			break ;
 		}
 		
+		if(!flag)
+		{
 		current_instr = new Rmbinop(m, r1, r2, current_label);
 		current_label = graph.add(current_instr);
 		
@@ -176,6 +190,7 @@ public class ToRTL extends EmptyVisitor
 		next_label=current_label ;
 		current_register = r2 ;
 		expr.e1	.accept(this);
+		}
 
 	}
 	
@@ -189,8 +204,15 @@ public class ToRTL extends EmptyVisitor
 	
 	
 	public void visit(Eassign_local var) { //on a verifie dans le typer que la variable existe, on va juste aller la noter
+		Register reg_of_access = current_register;
 		current_register = local_variables.get(var.i) ;
 		next_label = current_label ;
+		
+		
+		
+		current_instr = new Rmbinop(Mbinop.Mmov,reg_of_access,current_register,next_label);
+		current_register = reg_of_access;
+		current_label = graph.add(current_instr);
 		var.e.accept(this);
 	}
 	
@@ -207,6 +229,7 @@ public class ToRTL extends EmptyVisitor
 	
 	public void visit(Sexpr s) {
 		current_register = new Register() ;
+	
 		s.e.accept(this);
 		
 	}
@@ -224,6 +247,7 @@ public class ToRTL extends EmptyVisitor
 	}
 	
 	public void visit(Swhile s) {
+		
 		Label label_false = current_label ;	
 		current_label = graph.add(new Rgoto(current_label)); // il faudra modifier le label quand on saura lequel c'est
 		Label label_retour = current_label ;
@@ -239,6 +263,7 @@ public class ToRTL extends EmptyVisitor
 		// attention, on regarde juste si l'expression vaut pas 0, sinon on va autre part...
 		switch(e.b) {
 		case Band :
+			
 			this.RTLc(e.e2, truel, falsel) ; 
 			this.RTLc(e.e1, current_label, falsel) ;
 			break;
@@ -247,7 +272,7 @@ public class ToRTL extends EmptyVisitor
 			this.RTLc(e.e1, truel, current_label ) ;
 			break;
 		default :
-			Mubranch m = new Mjnz() ;
+			Mubranch m = new Mjnz();
 			current_instr = new Rmubranch(m, current_register, truel, falsel) ;
 			current_label = graph.add(current_instr);
 			next_label = current_label;
@@ -301,14 +326,12 @@ public class ToRTL extends EmptyVisitor
 	public void visit(Eassign_field n)
 	{	
 		// il va y avoir du R Store
-
+		
 		next_label = current_label;
-		int current_position = n.f.field_position;
-		Register r_e2 = new Register();
+		int current_position = n.f.field_position;		
 		Register r_e1 = new Register();
-		current_instr = new Rstore(r_e2,r_e1,current_position,next_label);
+		current_instr = new Rstore(current_register,r_e1,current_position,next_label);
 		current_label = graph.add(current_instr);
-		current_register = r_e2;
 		n.e2.accept(this);
 		reg_struct = r_e1;
 		// il faut maintenant réussir à récuperer dans un registre l'adresse de la structure

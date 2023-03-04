@@ -136,6 +136,7 @@ public class Typing implements Pvisitor {
 	public void visit(Passign n) {
 		n.e1.accept(this); // partie gauche, forcement un identifiant en tout cas current id est tjr ms a jour
 		Expr e1 = current_expr;
+		Field e1_field = field_to_update;
 		String id_to_assign = current_id;
 		n.e2.accept(this); // partie droite, doit etre du type de n.e1
 		
@@ -153,7 +154,7 @@ public class Typing implements Pvisitor {
 		else
 		{
 			
-			current_expr = new Eassign_field(e1,field_to_update,current_expr);
+			current_expr = new Eassign_field(e1,e1_field,current_expr);
 		}
 		current_expr.typ = e1.typ;
 		
@@ -297,7 +298,9 @@ public class Typing implements Pvisitor {
 	public void visit(Pwhile n) {
 		n.e.accept(this);
 		Expr e = current_expr;
+		
 		n.s1.accept(this);
+		
 		current_stmt = new Swhile(e,current_stmt);
 		
 	}
@@ -331,6 +334,7 @@ public class Typing implements Pvisitor {
 		bloc_variableHT.pollLast();
 		
 		bloc = new Sblock(decl_var,sl);
+		current_stmt = bloc;
 	}
 
 	@Override
@@ -357,6 +361,7 @@ public class Typing implements Pvisitor {
 		{
 			n_var.typ.accept(this);
 			current_field = new Field(n_var.id,current_type,current_position);
+			
 			current_position += 8;
 			if(!(structHT.get(n.s).fields.get(n_var.id) == null))
 			{

@@ -1,4 +1,7 @@
 #!/bin/bash
-D="$( cd "$(dirname "$0")" ; pwd -P )"
-exec java -cp $D/lib/java-cup-11a-runtime.jar:$D/bin mini_c.Main $@
+D="$( cd "$(dirname "$0")" ; pwd -P )";
+javac -cp $D/projet/lib/java-cup-11a.jar:src/mini_c -d bin $D/projet/src/mini_c/*java;
+cd tests;
+./run -i "../projet/mini-c --interp-rtl";
+
 
