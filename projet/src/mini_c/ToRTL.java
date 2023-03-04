@@ -103,7 +103,7 @@ public class ToRTL extends EmptyVisitor
 			current_instr = new Rmbinop(Mbinop.Msub, current_register,r2, next_label);
 			current_label = graph.add(current_instr);
 			expr.e.accept(this);
-			current_register = r2;
+			current_register = r2; 	
 			expr.e.accept(this);
 			break;
 			
