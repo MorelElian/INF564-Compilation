@@ -1,88 +1,70 @@
 package mini_c;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
-/** Interprète de code RTL */
-public class RTLinterp implements RTLVisitor {
+/** Interprète de code ERTL */
+public class ERTLinterp implements ERTLVisitor {
 
-  private Map<String, RTLfun> funs;
-  private Map<Register, Long> regs;
-  private Memory mem;
+  private Map<String, ERTLfun> funs;
+  private Machine mem;
   private Label next;
-  
+
   /** interprète un programme RTL donné, à partir de la fonction "main" */
-  RTLinterp(RTLfile file) {
-	
-    this.funs = new HashMap<String, RTLfun>();
-    for (RTLfun f: file.funs)
+  ERTLinterp(ERTLfile file) {
+    this.funs = new HashMap<String, ERTLfun>();
+    for (ERTLfun f: file.funs)
       this.funs.put(f.name, f);
-    this.mem = new Memory();
-    call("main", new LinkedList<Register>());
+    this.mem = new Machine();
+    call("main");
   }
 
-  private long call(String name, List<Register> rl) {
-    RTLfun f = this.funs.get(name);
+  private void call(String name) {
+    ERTLfun f = this.funs.get(name);
     assert f != null; // programme bien typé
-    Map<Register, Long> saved_regs = this.regs, new_regs = new HashMap<>();
+    this.mem.push(0L); // adresse de retour fictive
+    HashMap<Register, Long> saved_regs = this.mem.regs, new_regs = new HashMap<>();
     for (Register r: f.locals) new_regs.put(r, 0L);
-    assert f.formals.size() == rl.size(); // programme bien typé
-    Iterator<Register> actuals = rl.iterator();
-    for (Register param: f.formals)
-      new_regs.put(param, get(actuals.next()));
-    this.regs = new_regs;
+    this.mem.regs = new_regs;
     this.next = f.entry;
-    while (!this.next.equals(f.exit)) {
-      RTL i = f.body.graph.get(this.next);
-      if (i == null) throw new Error("no RTL instruction at label " + this.next);
-      
+    while (true) {
+      ERTL i = f.body.graph.get(this.next);
+      if (i == null) throw new Error("no ERTL instruction at label " + this.next);
+      if (i instanceof ERreturn) break;
       i.accept(this);
     }
-    long res = this.regs.containsKey(f.result) ? get(f.result) : 0L;
-    this.regs = saved_regs;
-    return res;
+    this.mem.pop(); // dépile l'adresse de retour fictive
+    this.mem.regs = saved_regs;
   }
-  
-  private void set(Register r, long v) {
-    this.regs.put(r, v);
-  }
-  private void set(Register r, boolean b) {
-    this.regs.put(r, b ? 1L : 0L);
-  }
-  private long get(Register r) {
-    if (!this.regs.containsKey(r)) throw new Error("unknown register " + r);
-    return this.regs.get(r);
-  }
-  
-  @Override
-  public void visit(Rconst o) {
-    set(o.r, o.i);
 
+  long get(Register r) { return this.mem.get(r); }
+  void set(Register r, long v) { this.mem.set(r,  v); }
+  void set(Register r, boolean v) { this.mem.set(r,  v); }
+
+  @Override
+  public void visit(ERconst o) {
+    this.mem.set(o.r, o.i);
     this.next = o.l;
   }
 
   @Override
-  public void visit(Rload o) {
+  public void visit(ERload o) {
     long p = get(o.r1);
-    
-    set(o.r2, this.mem.get(p, o.i));
+    set(o.r2, this.mem.load(p, o.i));
     this.next = o.l;
   }
 
   @Override
-  public void visit(Rstore o) {
+  public void visit(ERstore o) {
     long p = get(o.r2);
     long v = get(o.r1);
-    
-    this.mem.set(p, o.i, v);
+    this.mem.store(p, o.i, v);
     this.next = o.l;
   }
 
   @Override
-  public void visit(Rmunop o) {
+  public void visit(ERmunop o) {
     long v = get(o.r);
     if (o.m instanceof Maddi)
       set(o.r, v + ((Maddi)o.m).n);
@@ -94,7 +76,7 @@ public class RTLinterp implements RTLVisitor {
   }
 
   @Override
-  public void visit(Rmbinop o) {
+  public void visit(ERmbinop o) {
     long v1 = get(o.r1);
     if (o.m == Mbinop.Mmov)
       set(o.r2, v1);
@@ -104,7 +86,9 @@ public class RTLinterp implements RTLVisitor {
       case Madd: set(o.r2, v2 + v1); break;
       case Msub: set(o.r2, v2 - v1); break;
       case Mmul: set(o.r2, v2 * v1); break;
-      case Mdiv: set(o.r2, v2 / v1); break;
+      case Mdiv:
+        if (!o.r2.equals(Register.rax)) throw new Error("div: r2 must be %rax");
+        set(o.r2, v2 / v1); break;
       case Msete: set(o.r2, v2 == v1); break;
       case Msetne: set(o.r2, v2 != v1); break;
       case Msetl: set(o.r2, v2 < v1); break;
@@ -118,7 +102,7 @@ public class RTLinterp implements RTLVisitor {
   }
 
   @Override
-  public void visit(Rmubranch o) {
+  public void visit(ERmubranch o) {
     long v = get(o.r);
     boolean b;
     if      (o.m instanceof Mjz  ) b = v == 0L;
@@ -129,7 +113,7 @@ public class RTLinterp implements RTLVisitor {
   }
 
   @Override
-  public void visit(Rmbbranch o) {
+  public void visit(ERmbbranch o) {
     long v1 = get(o.r1);
     long v2 = get(o.r2);
     boolean b = true; // parce que le compilo Java n'est pas assez malin
@@ -141,35 +125,65 @@ public class RTLinterp implements RTLVisitor {
   }
 
   @Override
-  public void visit(Rcall o) {
+  public void visit(ERcall o) {
     switch (o.s) {
     case "malloc":
-      set(o.r, this.mem.malloc((int)get(o.rl.get(0))));
+      set(Register.result, this.mem.malloc((int)get(Register.rdi)));
       break;
     case "putchar":
-      long n = get(o.rl.get(0));
+      long n = get(Register.rdi);
       System.out.print((char)n);
-      set(o.r, n);
+      set(Register.result, n);
       break;
     default:
-      set(o.r, call(o.s, o.rl));
+      call(o.s);
     }
     this.next = o.l;
   }
 
   @Override
-  public void visit(Rgoto o) {
+  public void visit(ERgoto o) {
     this.next = o.l;
   }
 
   @Override
-  public void visit(RTLfun o) {
+  public void visit(ERTLfun o) {
     assert false; // inutilisé
   }
 
   @Override
-  public void visit(RTLfile o) {
+  public void visit(ERTLfile o) {
     assert false; // inutilisé
   }
-  
+
+  @Override
+  public void visit(ERalloc_frame o) {
+    this.mem.push_register(Register.rbp);
+    set(Register.rbp, get(Register.rsp));
+    this.next = o.l;
+  }
+
+  @Override
+  public void visit(ERdelete_frame o) {
+    this.mem.pop_in_register(Register.rbp);
+    this.next = o.l;
+  }
+
+  @Override
+  public void visit(ERget_param o) {
+    set(o.r, this.mem.load(get(Register.rbp), o.i));
+    this.next = o.l;
+  }
+
+  @Override
+  public void visit(ERpush_param o) {
+    this.mem.push(get(o.r));
+    this.next = o.l;
+  }
+
+  @Override
+  public void visit(ERreturn o) {
+    // rien à faire ici
+  }
+
 }

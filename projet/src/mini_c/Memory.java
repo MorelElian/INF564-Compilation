@@ -38,7 +38,7 @@ public class Memory {
     if (b == null) seg_fault();
     int i = index(b, ofs);
     //ai-je le droit de faire ça ? 
-    if(b[i] == null) return 0L;
+    //if(b[i] == null) return 0L;
     return b[i];
   }
   

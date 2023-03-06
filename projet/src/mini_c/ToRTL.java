@@ -19,7 +19,6 @@ public class ToRTL extends EmptyVisitor
 	Label next_label;
 	Label exit_label;
 	Register current_register;
-	Register reg_struct = new Register();
 	Register next_register;
 	Register fun_result;
 	RTLfun fun_to_add;
@@ -92,9 +91,9 @@ public class ToRTL extends EmptyVisitor
 	
 	public void visit(Eunop expr) { // ne marche pas
 		// Label label_memo = next_label ;
-		// System.out.println("label_memo=" + label_memo);
+		
 		next_label = current_label ;
-		//System.out.println(expr.u);
+		
 		 // on va chercher current_int
 		
 		switch(expr.u) {
@@ -121,7 +120,7 @@ public class ToRTL extends EmptyVisitor
 			break;
 		}
 
-		// System.out.println("label_memo=" + label_memo);x
+		
 	}
 	
 	
@@ -196,7 +195,6 @@ public class ToRTL extends EmptyVisitor
 	
 	public void visit(Decl_var var) { //on cree seulement un registre pour stocker la variable, et on s'en souvient dans local_variables
 		current_register = new Register() ;
-		//System.out.println(current_register + var.name);
 		fun_to_add.locals.add(current_register);
 		
 		local_variables.put(var.name, current_register);
@@ -325,7 +323,6 @@ public class ToRTL extends EmptyVisitor
 	
 	public void visit(Eassign_field n)
 	{	
-		// il va y avoir du R Store
 		
 		next_label = current_label;
 		int current_position = n.f.field_position;		
@@ -333,7 +330,7 @@ public class ToRTL extends EmptyVisitor
 		current_instr = new Rstore(current_register,r_e1,current_position,next_label);
 		current_label = graph.add(current_instr);
 		n.e2.accept(this);
-		reg_struct = r_e1;
+		current_register = r_e1;
 		// il faut maintenant réussir à récuperer dans un registre l'adresse de la structure
 		n.e1.accept(this);
 		// il nous faut maintenant trouver la position du field dans la structure
@@ -346,6 +343,7 @@ public class ToRTL extends EmptyVisitor
 	{
 	
 		next_label = current_label;
+		Register reg_struct = new Register();
 		int current_position = n.f.field_position;
 		current_instr = new Rload(reg_struct,current_position,current_register,next_label);
 		current_label = graph.add(current_instr);

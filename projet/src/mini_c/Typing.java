@@ -153,8 +153,8 @@ public class Typing implements Pvisitor {
 		}
 		else
 		{
-			
-			current_expr = new Eassign_field(e1,e1_field,current_expr);
+			Eaccess_field e1_b = (Eaccess_field) e1;
+			current_expr = new Eassign_field(e1_b.e,e1_field,current_expr);
 		}
 		current_expr.typ = e1.typ;
 		
