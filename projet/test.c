@@ -1,8 +1,10 @@
-int fact(int n, int j) {
-  int x;
-  if (n <= 1) return 1;
-  return n * fact(n-1,2);
-}
-int main() {
-  return fact(1,2);
+int main(int z)
+{
+	int y;
+	int x;
+	x = x+y;
+	y = y-3;
+	x = x+2;
+	
+	return y+x;
 }

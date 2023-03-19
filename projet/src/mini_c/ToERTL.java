@@ -28,7 +28,7 @@ public class ToERTL extends EmptyRTLVisitor
 		
 		for(RTLfun current_funct : f.funs)
 		{
-			fun_to_add = new ERTLfun(current_funct.name,0);
+			fun_to_add = new ERTLfun(current_funct.name,current_funct.formals.size());
 			graph = new ERTLgraph();
 			
 			
@@ -37,8 +37,15 @@ public class ToERTL extends EmptyRTLVisitor
 			
 			
 			fun_to_add.body = graph;
+			Liveness Live = new Liveness(graph);
+			//Live.print(fun_to_add.entry);
+			Interference interference = new Interference(Live);
+			interference.print();
+			Coloring colors = new Coloring(interference);
+			colors.print();
 			to_send.funs.add(fun_to_add);
 		}
+		
 		return to_send;
 	}
 	public void visit(RTLfun f)
